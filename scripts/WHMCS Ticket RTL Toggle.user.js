@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WHMCS Ticket RTL Toggle
 // @namespace    http://tampermonkey.net/
-// @version      2026-06-03
+// @version      2026-10-15
 // @description  Auto-RTL Arabic ticket replies + manual toggle buttons for WHMCS 8.2.1
 // @author       Ali-Hela
 // @match        *://*/*/supporttickets.php?action=view*
@@ -107,9 +107,51 @@
         container.parentNode.insertBefore(bar, container);
     }
 
+    // Reply / note input boxes (markdown editors created by WHMCS JS)
+    function addEditorButtons() {
+        document.querySelectorAll('textarea#replymessage, textarea#replynote').forEach(function(ta) {
+            var editor = ta.closest('.md-editor');
+            var toolbar = editor && editor.querySelector('.md-header');
+            if (!toolbar || toolbar.querySelector('.rtl-toggle-btn')) return;
+
+            var userSet = false;
+            var btn = makeBtn('RTL', 'Toggle right-to-left for this input box');
+            btn.className = 'btn btn-sm btn-default rtl-toggle-btn';
+
+            function set(on) {
+                applyRTL(ta, on);
+                syncBtn(btn, on);
+            }
+
+            btn.addEventListener('click', function() {
+                userSet = true;
+                set(ta.dataset.rtlOn !== '1');
+            });
+
+            // Auto-switch while typing, until the user toggles manually
+            ta.addEventListener('input', function() {
+                if (!userSet) set(isArabic(ta.value));
+            });
+
+            set(isArabic(ta.value));
+
+            var group = document.createElement('div');
+            group.className = 'btn-group';
+            group.appendChild(btn);
+            toolbar.appendChild(group);
+        });
+    }
+
     function init() {
         addGlobalButton();
         addButtons();
+        addEditorButtons();
+        // Markdown editors may be initialised after page load
+        var tries = 0;
+        var timer = setInterval(function() {
+            addEditorButtons();
+            if (++tries >= 20) clearInterval(timer);
+        }, 500);
     }
 
     if (document.readyState === 'loading') {
